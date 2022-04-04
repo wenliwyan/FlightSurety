@@ -5,6 +5,7 @@ pragma solidity ^0.4.25;
 // More info: https://www.nccgroup.trust/us/about-us/newsroom-and-events/blog/2018/november/smart-contract-insecurity-bad-arithmetic/
 
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "./FlightSuretyData.sol";
 
 /************************************************** */
 /* FlightSurety Smart Contract                      */
@@ -33,7 +34,7 @@ contract FlightSuretyApp {
         address airline;
     }
     mapping(bytes32 => Flight) private flights;
-
+    FlightSuretyData private data;
  
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
@@ -73,10 +74,12 @@ contract FlightSuretyApp {
     */
     constructor
                                 (
+                                    address dataContract
                                 ) 
                                 public 
     {
         contractOwner = msg.sender;
+        data = FlightSuretyData(dataContract);
     }
 
     /********************************************************************************************/
@@ -100,14 +103,8 @@ contract FlightSuretyApp {
     * @dev Add an airline to the registration queue
     *
     */   
-    function registerAirline
-                            (   
-                            )
-                            external
-                            pure
-                            returns(bool success, uint256 votes)
-    {
-        return (success, 0);
+    function registerAirline(address airline) external returns (bool success, uint votes) {
+        (success, votes) = data.registerAirline(airline);
     }
 
 
@@ -117,11 +114,18 @@ contract FlightSuretyApp {
     */  
     function registerFlight
                                 (
+                                    address airline,
+                                    string flight,
+                                    uint256 timestamp
                                 )
                                 external
-                                pure
     {
-
+        bytes32 flightKey = getFlightKey(airline, flight, timestamp);
+        flights[flightKey] = Flight({
+            isRegistered: true,
+            statusCode: STATUS_CODE_UNKNOWN,
+            updatedTimestamp: now,
+            airline: airline});
     }
     
    /**
@@ -136,8 +140,12 @@ contract FlightSuretyApp {
                                     uint8 statusCode
                                 )
                                 internal
-                                pure
     {
+        if (statusCode == STATUS_CODE_LATE_AIRLINE) {
+            uint8 multiplier = 3;
+            uint8 divider = 2;
+            data.creditInsurees(airline, flight, timestamp, multiplier, divider);
+        }
     }
 
 
@@ -312,7 +320,7 @@ contract FlightSuretyApp {
         return indexes;
     }
 
-    // Returns array of three non-duplicating integers from 0-9
+    // Returns random integers from 0-9
     function getRandomIndex
                             (
                                 address account
